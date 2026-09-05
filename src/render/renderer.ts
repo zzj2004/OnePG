@@ -2,7 +2,7 @@
 // 白盒渲染层：只负责把状态画清楚，不追求好看
 // 想换美术（PixiJS 精灵 / 特效）时只动这个目录，核心零改动
 // ============================================================
-import { Application, Graphics, Text } from 'pixi.js'
+import { Application, Container, Graphics, Text } from 'pixi.js'
 import {
   DODGE_IFRAME_END,
   DODGE_IFRAME_START,
@@ -94,11 +94,21 @@ export async function createRenderer(): Promise<Renderer> {
   window.addEventListener('resize', fitCanvas)
   fitCanvas()
 
+  // ---- 世界容器：场景（背景/平台/角色/粒子）随镜头缩放平移；UI 文字固定不动 ----
+  const world = new Container()
+  app.stage.addChild(world)
+
   const g = new Graphics()
-  app.stage.addChild(g)
+  world.addChild(g)
   const pg = new Graphics() // 粒子层（场景之上、HUD 之下）
-  app.stage.addChild(pg)
+  world.addChild(pg)
+  const uiG = new Graphics() // 镜头空间的矢量绘制（屏幕外箭头 / KO 闪光），固定不随镜头
+  app.stage.addChild(uiG)
   const juice = new Juice()
+
+  // ---- 动态镜头状态 ----
+  const cam = { x: W / 2, y: H / 2, s: 1 } // x/y = 镜头中心（世界坐标），s = 缩放
+  let koFlash = 0
 
   // ---- 人物模型表现层状态（飘带物理 / 落地压缩），按玩家槽位各一份 ----
   const fighterFx: FighterFx[] = [
@@ -107,19 +117,21 @@ export async function createRenderer(): Promise<Renderer> {
   ]
 
   // ---- 静态背景：星空 + 月亮 + 远景浮岛（生成一次，垫在最底层） ----
+  // 覆盖范围远超画面：镜头拉远时四周依然是星空而不是黑边
   const bgG = new Graphics()
-  bgG.rect(0, 0, W, H).fill({ color: 0x0d1016 })
-  for (let i = 0; i < 110; i++) {
-    bgG.circle(Math.random() * W, Math.random() * H * 0.9, Math.random() * 1.6 + 0.4).fill({
-      color: 0xdfe6f2,
-      alpha: 0.15 + Math.random() * 0.5,
-    })
+  bgG.rect(-1100, -1150, 3480, 3020).fill({ color: 0x0d1016 })
+  for (let i = 0; i < 340; i++) {
+    bgG.circle(
+      -1100 + Math.random() * 3480,
+      -1150 + Math.random() * 3020,
+      Math.random() * 1.8 + 0.4,
+    ).fill({ color: 0xdfe6f2, alpha: 0.12 + Math.random() * 0.5 })
   }
   bgG.circle(1090, 110, 46).fill({ color: 0x272e3d })
   bgG.circle(1074, 96, 40).fill({ color: 0x333c4f })
   bgG.poly([150, 430, 260, 418, 320, 444, 210, 452]).fill({ color: 0x1a1f2a })
   bgG.poly([980, 560, 1120, 545, 1180, 580, 1010, 592]).fill({ color: 0x171c26 })
-  app.stage.addChildAt(bgG, 0)
+  world.addChildAt(bgG, 0)
 
   // ---- 标题页演示用：两个角色摆好架势 ----
   const demoSim = createInitialSim('pvp')
@@ -178,25 +190,31 @@ export async function createRenderer(): Promise<Renderer> {
     t.visible = false
     app.stage.addChild(t)
   }
+  // KO 特写大字
+  const koText = mkText(60, 0xff5252)
+  koText.style.fontWeight = 'bold'
+  koText.anchor.set(0.5, 0.5)
+  koText.position.set(W / 2, 120)
+  koText.visible = false
+  app.stage.addChild(koText)
+  let koTimer = 0
   // 伤害飘字池：命中跳出数字，上浮渐隐（6 个轮转够用）
-  const floatPool: { t: Text; life: number }[] = []
+  const floatPool: { t: Text; life: number; wx: number; wy: number }[] = []
   for (let i = 0; i < 6; i++) {
     const t = mkText(22, 0xffe08a)
     t.style.fontWeight = 'bold'
     t.anchor.set(0.5, 0.5)
     t.visible = false
     app.stage.addChild(t)
-    floatPool.push({ t, life: 0 })
+    floatPool.push({ t, life: 0, wx: 0, wy: 0 })
   }
   let floatNext = 0
   const spawnFloat = (x: number, y: number, value: number): void => {
     const f = floatPool[floatNext]
     floatNext = (floatNext + 1) % floatPool.length
     f.t.text = `-${Math.round(value)}`
-    f.t.position.set(
-      Math.max(60, Math.min(W - 60, x)),
-      Math.max(70, Math.min(H - 70, y - PLAYER_H - 14)),
-    )
+    f.wx = x
+    f.wy = y - PLAYER_H - 14
     f.t.style.fill = value >= 15 ? COLORS.chargeTiers[2] : value >= 10 ? 0xffa94d : 0xffe08a
     f.life = 42
   }
@@ -584,8 +602,15 @@ export async function createRenderer(): Promise<Renderer> {
 
     // ---- 对局 / 新手教学 ----
     if (screen.kind !== 'match' && screen.kind !== 'tutorial') {
-      app.stage.x = 0
-      app.stage.y = 0
+      // 非对局界面：镜头复位到原点
+      cam.s = 1
+      cam.x = W / 2
+      cam.y = H / 2
+      world.scale.set(1)
+      world.position.set(0, 0)
+      uiG.clear()
+      koFlash = 0
+      koText.visible = false
       prevCountdownLeft = null
       hideLooseTexts()
       return
@@ -601,6 +626,38 @@ export async function createRenderer(): Promise<Renderer> {
     const isTutorial = screen.kind === 'tutorial'
     const net = screen.kind === 'match' ? screen.net : undefined
     hideMenus()
+
+    // ---- 动态镜头：框住所有存活角色；被击飞的角色按速度外推，镜头提前预判 ----
+    {
+      const alive = s.players.filter((pl) => !pl.out)
+      let minX = Infinity
+      let maxX = -Infinity
+      let minY = Infinity
+      let maxY = -Infinity
+      for (const pl of alive) {
+        minX = Math.min(minX, pl.x)
+        maxX = Math.max(maxX, pl.x)
+        minY = Math.min(minY, pl.y - PLAYER_H / 2)
+        maxY = Math.max(maxY, pl.y - PLAYER_H / 2)
+        if (Math.abs(pl.vx) > 8) {
+          minX = Math.min(minX, pl.x + pl.vx * 10)
+          maxX = Math.max(maxX, pl.x + pl.vx * 10)
+        }
+        if (pl.vy < -10) minY = Math.min(minY, pl.y + pl.vy * 8)
+      }
+      let targetS = Math.min(W / (maxX - minX + 460), H / (maxY - minY + 380))
+      targetS = Math.max(0.58, Math.min(1.05, targetS))
+      cam.s += (targetS - cam.s) * 0.07
+      cam.x += ((minX + maxX) / 2 - cam.x) * 0.1
+      cam.y += ((minY + maxY) / 2 - 10 - cam.y) * 0.1
+      // 终局：镜头缓缓推向胜者
+      if (s.matchOver !== 0) {
+        const winner = s.players[s.matchOver - 1]
+        cam.s += (1.12 - cam.s) * 0.05
+        cam.x += (winner.x - cam.x) * 0.06
+        cam.y += (winner.y - PLAYER_H - cam.y) * 0.06
+      }
+    }
 
     // 联机状态横幅
     if (screen.kind === 'match' && screen.paused) {
@@ -758,10 +815,12 @@ export async function createRenderer(): Promise<Renderer> {
           juice.spawnHit(px, py - PLAYER_H / 2, 0.3, 0x53e6c0)
           sfx.shieldBlock()
         }
-        // 出界/KO：连击清零
+        // 出界/KO：连击清零 + 全屏闪光 + KO 大字
         if (cur.stocks[i] < prev.stocks[i]) {
           juice.spawnKO(prev.positions[i][0], prev.positions[i][1], i === 0 ? COLORS.p1 : COLORS.p2)
           sfx.ko()
+          koFlash = 8
+          koTimer = 55
           comboState[i].count = 0
           comboState[i].timer = 0
         }
@@ -796,8 +855,8 @@ export async function createRenderer(): Promise<Renderer> {
         t.text = `${cs.count} 连击!`
         t.style.fill = COLORS.chargeTiers[Math.min(2, Math.floor(cs.count / 3))]
         t.position.set(
-          Math.max(120, Math.min(W - 120, px)),
-          Math.max(90, Math.min(H - 120, py - PLAYER_H - 46)),
+          Math.max(120, Math.min(W - 120, (px - cam.x) * cam.s + W / 2)),
+          Math.max(90, Math.min(H - 120, (py - PLAYER_H - 46 - cam.y) * cam.s + H / 2)),
         )
         t.visible = true
       } else {
@@ -805,23 +864,56 @@ export async function createRenderer(): Promise<Renderer> {
       }
     }
 
-    // 伤害飘字上浮渐隐
+    // 伤害飘字上浮渐隐（随镜头换算到屏幕坐标）
     for (const f of floatPool) {
       if (f.life <= 0) {
         f.t.visible = false
         continue
       }
       f.life--
-      f.t.y -= 0.9
       f.t.alpha = Math.min(1, f.life / 20)
+      f.t.position.set(
+        (f.wx - cam.x) * cam.s + W / 2,
+        (f.wy - cam.y) * cam.s + H / 2 - (42 - f.life) * 0.9,
+      )
       f.t.visible = true
     }
 
-    const off = juice.updateAndDraw(pg)
-    app.stage.x = off.dx
-    app.stage.y = off.dy
+    // ---- KO 特写闪光 + 屏幕外指示箭头（把飞出画面的角色标回来）----
+    uiG.clear()
+    if (koFlash > 0) {
+      koFlash--
+      uiG.rect(0, 0, W, H).fill({ color: 0xffffff, alpha: (koFlash / 8) * 0.38 })
+    }
+    if (koTimer > 0) {
+      koTimer--
+      koText.style.fontSize = 58 + Math.max(0, koTimer - 40) * 1.4
+      koText.visible = koTimer > 0
+    }
+    if (s.matchOver === 0) {
+      for (const pl of s.players) {
+        if (pl.out) continue
+        const sx = (pl.x - cam.x) * cam.s + W / 2
+        const sy = (pl.y - PLAYER_H / 2 - cam.y) * cam.s + H / 2
+        if (sx >= 36 && sx <= W - 36 && sy >= 36 && sy <= H - 36) continue
+        const pxx = Math.max(36, Math.min(W - 36, sx))
+        const pyy = Math.max(36, Math.min(H - 36, sy))
+        const ang = Math.atan2(sy - H / 2, sx - W / 2)
+        const cs = Math.cos(ang)
+        const sn = Math.sin(ang)
+        const pcolor = pl.id === 0 ? COLORS.p1 : COLORS.p2
+        uiG.poly([
+          pxx + cs * 17, pyy + sn * 17,
+          pxx - cs * 9 - sn * 13, pyy - sn * 9 + cs * 13,
+          pxx - cs * 9 + sn * 13, pyy - sn * 9 - cs * 13,
+        ]).fill({ color: pcolor, alpha: 0.92 })
+        uiG.circle(pxx - cs * 6, pyy - sn * 6, 10).fill({ color: pcolor, alpha: 0.5 })
+      }
+    }
 
-    // 显式渲染一帧：后台标签页 rAF 暂停时，手动驱动的画面也能落到画布上
+    const off = juice.updateAndDraw(pg)
+    world.scale.set(cam.s)
+    world.position.set(W / 2 - cam.x * cam.s + off.dx, H / 2 - cam.y * cam.s + off.dy)
     app.render()
   }
 
