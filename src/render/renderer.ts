@@ -407,7 +407,7 @@ export async function createRenderer(): Promise<Renderer> {
       // 底部分隔线 + 操作速览
       g.roundRect(W / 2 - 340, H - 96, 680, 1.5, 0).fill({ color: 0x2b3242 })
       hint.text =
-        'P1：A/D 移动 W 跳 S 下 F 攻击(按住蓄力) G 防御 H 闪避\n' +
+        'P1：A/D 移动 W/K 跳 S 下 J 攻击(按住蓄力) G 防御 L 闪避 · 双击A/A或D/D冲刺\n' +
         'P2：←/→ 移动 ↑/空格 跳 ↓ 下 小键盘0 攻击 小键盘1 防御 小键盘2 闪避\n' +
         '手柄：摇杆/十字键 移动  A 跳  X 攻击  B 防御  Y 闪避（第1支→P1 第2支→P2）'
       hint.visible = true

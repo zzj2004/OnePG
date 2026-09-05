@@ -187,6 +187,29 @@ function fuzzRun(settings: MatchSettings, frames: number): FuzzResult {
   check('试玩·闪避翻滚可穿过对手（无身体碰撞阻挡）', passed)
 }
 
+// ---- 12. 双击冲刺：双击同方向获得爆发速度；单击不触发 ----
+{
+  function dashProbe(taps: number[]): number {
+    const sim = createInitialSim({ mode: 'pvp', p1Char: 0, p2Char: 0, mapId: 0 })
+    let maxVx = 0
+    for (let f = 1; f <= 130; f++) {
+      const p1 = emptyInput()
+      if (taps.includes(f)) p1.right = true
+      step(sim, [p1, emptyInput()])
+      maxVx = Math.max(maxVx, Math.abs(sim.players[0].vx))
+    }
+    return maxVx
+  }
+  const dash = dashProbe([92, 97]) // 双击（间隔5帧）
+  const single = dashProbe([92]) // 单击
+  check(
+    '试玩·双击冲刺：爆发速度约12（超过跑动极限7.8）',
+    dash > 10.5,
+    `最大速度 ${dash.toFixed(1)}`,
+  )
+  check('试玩·单击不触发冲刺', single < 9, `最大速度 ${single.toFixed(1)}`)
+}
+
 // ---- 7. 蓄力滑下悬崖：空中蓄力必须作废（本轮修的 bug 的回归锁） ----
 {
   const sim = createInitialSim({ mode: 'pvp', p1Char: 0, p2Char: 0, mapId: 0 })

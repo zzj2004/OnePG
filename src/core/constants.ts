@@ -37,6 +37,11 @@ export const FAST_FALL_CAP = 20 // 快速下落极限
 // ---- 下穿软平台 ----
 export const DROP_THROUGH_FRAMES = 12 // 下穿后多少帧内忽略软平台
 
+// ---- 双击冲刺 ----
+export const DASH_TAP_WINDOW = 14 // 双击判定窗口：两次同向按键间隔不超过这么多帧
+export const DASH_SPEED = 12 // 地面冲刺爆发速度（跑动极限的 1.7 倍）
+export const DASH_AIR_SPEED = 9 // 空中冲刺速度
+
 // ---- 攻击（M0 唯一招式：横扫）----
 export const ATTACK_STARTUP = 4 // 前摇：按攻击到判定出现的帧数
 export const ATTACK_ACTIVE = 3 // 判定持续帧数

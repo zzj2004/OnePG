@@ -68,15 +68,16 @@ const TUTORIAL_STEPS: {
   done: (sim: SimState, hitDelta: number) => boolean
 }[] = [
   { instruction: '按 D 向右跑，靠近假人（别怕，它不还手）', done: (s) => Math.abs(s.players[0].x - s.players[1].x) < 110 },
-  { instruction: '按 W 跳起来', done: (s) => !s.players[0].grounded },
-  { instruction: '在空中再按一次 W，完成二段跳', done: (s) => s.players[0].jumpsUsed === 2 },
-  { instruction: '按 F 出拳，打中假人', done: (s) => s.players[1].damage > 0 },
-  { instruction: '按住 F 约 1 秒蓄力，松手轰出重击', done: (s, hitDelta) => hitDelta >= 12 },
-  { instruction: '再出一拳——命中后 0.4 秒内连按 F，接出三段连招！', done: (s) => s.players[0].comboStep >= 2 },
+  { instruction: '按 W（或 K）跳起来', done: (s) => !s.players[0].grounded },
+  { instruction: '在空中再按一次 W 或 K，完成二段跳', done: (s) => s.players[0].jumpsUsed === 2 },
+  { instruction: '按 J 出拳，打中假人', done: (s) => s.players[1].damage > 0 },
+  { instruction: '按住 J 约 1 秒蓄力，松手轰出重击', done: (s, hitDelta) => hitDelta >= 12 },
+  { instruction: '再出一拳——命中后 0.4 秒内连按 J，接出三段连招！', done: (s) => s.players[0].comboStep >= 2 },
   { instruction: '地上刷出武器了，走过去自动捡起（本命武器威力 100%）', done: (s) => s.players[0].weapon !== null },
-  { instruction: '拿着武器按 F 连打，感受武器的三段连招', done: (s) => s.players[0].weapon !== null && s.players[0].attackHasHit },
+  { instruction: '拿着武器按 J 连打，感受武器的三段连招', done: (s) => s.players[0].weapon !== null && s.players[0].attackHasHit },
   { instruction: '按住 G 举盾，试试防御姿态', done: (s) => s.players[0].shielding },
-  { instruction: '按 H 闪避（有无敌帧，躲攻击用的）', done: (s) => s.players[0].dodgeTimer > 0 || s.players[0].dodgeCooldown > 0 },
+  { instruction: '按 L 闪避（朝你移动的方向翻滚，有无敌帧）', done: (s) => s.players[0].dodgeTimer > 0 || s.players[0].dodgeCooldown > 0 },
+  { instruction: '试试双击 A/A 或 D/D 冲刺！', done: (s) => Math.abs(s.players[0].vx) > 10 },
   { instruction: '跳上薄平台，站好后按 S+W 穿下去', done: (s) => s.players[0].dropTimer > 0 },
   { instruction: '教学完成！按 Esc 返回标题，去按 2 挑战电脑吧', done: () => false },
 ]
@@ -312,6 +313,18 @@ async function boot(): Promise<void> {
     if (gameKeys().has(e.code)) e.preventDefault()
 
     // ---- 改键 + 音量设置 ----
+    // ---- 新手教学：Esc 退出，R 重置 ----
+    if (flow.screen === 'tutorial') {
+      if (e.code === 'Escape') toTitle()
+      else if (e.code === 'KeyR') {
+        sim = createInitialSim({ mode: 'pve', p1Char: 0, p2Char: 1, mapId: 0, tutorial: true })
+        bgmStart()
+        flow = { screen: 'tutorial', step: 0, prevDamage: 0 }
+      }
+      held.add(e.code)
+      return
+    }
+
     if (flow.screen === 'settings') {
       const row = SETTINGS_ROWS[flow.cursor]
       if (flow.listening) {

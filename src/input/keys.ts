@@ -20,11 +20,11 @@ export const DEFAULT_KEYMAPS: Record<PlayerSlot, Keymap> = {
   p1: {
     left: ['KeyA'],
     right: ['KeyD'],
-    up: ['KeyW'],
+    up: ['KeyW', 'KeyK'], // W/K 都可跳（格斗键位习惯：J 攻 K 跳 L 闪避）
     down: ['KeyS'],
-    attack: ['KeyF'],
+    attack: ['KeyJ'],
     shield: ['KeyG'],
-    dodge: ['KeyH'],
+    dodge: ['KeyL'],
   },
   p2: {
     left: ['ArrowLeft'],

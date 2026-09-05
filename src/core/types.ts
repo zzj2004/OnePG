@@ -69,6 +69,10 @@ export interface Player {
   weapon: 0 | 1 | 2 | 3 | null
   /** 拾取硬直剩余帧数 */
   pickupLag: number
+  /** 双击冲刺：上一次同向按键的方向（0=无） */
+  lastTapDir: -1 | 0 | 1
+  /** 双击冲刺：上一次同向按键的帧号 */
+  lastTapFrame: number
   /** 连段链当前段数（0 = 起手） */
   comboStep: number
   /** 连招窗口剩余帧数（命中后开启，窗口内可接下一段） */

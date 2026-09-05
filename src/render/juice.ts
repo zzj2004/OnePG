@@ -45,26 +45,27 @@ export class Juice {
     this.shake = Math.max(this.shake, 2 + s * 10)
   }
 
-  /** KO：大爆发环 */
+  /** KO：爆裂（减量提速——以前满屏血点糊脸） */
   spawnKO(x: number, y: number, color: number): void {
-    const cx = Math.max(60, Math.min(1220, x)) // 出界死亡的收拢到画面内
+    const cx = Math.max(60, Math.min(1220, x))
     const cy = Math.max(60, Math.min(660, y))
-    for (let i = 0; i < 40 && this.particles.length < MAX_PARTICLES; i++) {
-      const angle = (i / 40) * Math.PI * 2
-      const speed = 4 + Math.random() * 6
+    for (let i = 0; i < 18 && this.particles.length < MAX_PARTICLES; i++) {
+      const angle = (i / 18) * Math.PI * 2
+      const speed = 6 + Math.random() * 4
+      const white = i % 3 === 0
       this.particles.push({
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        life: 26 + Math.random() * 14,
-        maxLife: 40,
-        color,
-        size: 3 + Math.random() * 4,
-        gravity: 0.08,
+        life: 13 + Math.random() * 9,
+        maxLife: 22,
+        color: white ? 0xffffff : color,
+        size: 2.5 + Math.random() * 2.5,
+        gravity: 0.24,
       })
     }
-    this.shake = Math.max(this.shake, 16)
+    this.shake = Math.max(this.shake, 12)
   }
 
   /** 拾取闪光：向上的小星星 */

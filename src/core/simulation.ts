@@ -33,6 +33,9 @@ import {
   COYOTE_FRAMES,
   DOUBLE_JUMP_VEL,
   DROP_THROUGH_FRAMES,
+  DASH_AIR_SPEED,
+  DASH_SPEED,
+  DASH_TAP_WINDOW,
   DODGE_COOLDOWN,
   DODGE_END_LAG,
   DODGE_FRAMES,
@@ -143,6 +146,8 @@ export function createInitialSim(
     characterId,
     weapon: null,
     pickupLag: 0,
+    lastTapDir: 0,
+    lastTapFrame: -9999,
     comboStep: 0,
     comboOpen: 0,
     chainQueued: false,
@@ -502,6 +507,27 @@ function stepPlayer(s: SimState, i: 0 | 1, inp: PlayerInput): void {
   const prevY = p.y
   p.x += p.vx
   p.y += p.vy
+
+  // ---- 双击冲刺：同方向双击（窗口内）→ 爆发速度，攻击恢复帧也可用 ----
+  {
+    const tapR = pressed('right')
+    const tapL = pressed('left')
+    if ((tapR || tapL) && controllable) {
+      const dir: -1 | 1 = tapR ? 1 : -1
+      if (
+        p.lastTapDir === dir &&
+        s.tick - p.lastTapFrame <= DASH_TAP_WINDOW &&
+        p.dodgeTimer === 0
+      ) {
+        // 冲刺：爆发速度（恢复帧也能取消后摇，追击/逃跑都顺手）
+        p.vx = dir * (p.grounded ? DASH_SPEED : DASH_AIR_SPEED)
+        p.lastTapDir = 0
+      } else {
+        p.lastTapDir = dir
+        p.lastTapFrame = s.tick
+      }
+    }
+  }
 
   // ---- 平台碰撞：全部单向，仅在下落时从上方落上去 ----
   const map = mapOf(s.settings.mapId)
