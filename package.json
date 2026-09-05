@@ -1,0 +1,23 @@
+{
+  "name": "onepg",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:usb": "vite build --config vite.usb.config.ts",
+    "test": "tsx src/tests/determinism.ts && tsx src/tests/net.ts && tsx src/tests/gamepad.ts && tsx src/tests/playtest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.5",
+    "pixi.js": "^8.6.6"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}

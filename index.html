@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OnePG — M0 白盒原型</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0a0c10;
+        min-height: 100vh;
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #app canvas {
+        display: block;
+        box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      // 早期错误捕获：必须在游戏模块之前执行，供自动化诊断读取
+      window.__errors = [];
+      window.addEventListener("error", function (e) {
+        window.__errors.push(String(e.message || e));
+      });
+      window.addEventListener("unhandledrejection", function (e) {
+        window.__errors.push("rejection: " + String(e.reason));
+      });
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
