@@ -490,6 +490,32 @@ check(
     (mapOf(2).blast?.right ?? BLAST_RIGHT) === 1520,
 )
 
+// ---- 训练场：与教学同规则（不还手/打不死），武器快速刷新 ----
+{
+  const sim = createInitialSim({
+    mode: 'pve',
+    p1Char: 0,
+    p2Char: 1,
+    mapId: 0,
+    training: true,
+  })
+  let dummyActed = false
+  for (let f = 1; f <= 1800; f++) {
+    const p1 = emptyInput()
+    if (f <= 35) p1.right = true
+    if (f % 40 === 0) p1.attack = true
+    step(sim, [p1, emptyInput()])
+    const d = sim.players[1]
+    if (d.attackTimer > 0 || d.charging || d.shielding || d.dodgeTimer > 0) dummyActed = true
+  }
+  check(
+    '训练·假人站桩不还手且无限命',
+    !dummyActed && sim.players[1].stocks > 90 && sim.matchOver === 0,
+    `假人命数 ${sim.players[1].stocks}`,
+  )
+  check('训练·武器 2 秒内快速刷新', sim.weaponSpawnCount >= 1, `已刷新 ${sim.weaponSpawnCount} 把`)
+}
+
 if (failed) {
   // 用异常而非 process.exit：保持核心代码零 Node 依赖
   throw new Error('测试未通过：上面的 ❌ 项必须先修好')

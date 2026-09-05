@@ -132,6 +132,8 @@ export interface MatchSettings {
   mapId: 0 | 1 | 2
   /** 新手教学：假人不还手、命数无限 */
   tutorial?: boolean
+  /** 训练场：同教学规则，另配连击统计面板 */
+  training?: boolean
   /** 人机难度（0 简单 / 1 普通 / 2 困难），默认 1 */
   aiLevel?: 0 | 1 | 2
 }

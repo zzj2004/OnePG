@@ -48,7 +48,7 @@ type Flow =
   | { screen: 'waitGo'; role: 'host' | 'guest'; settings: MatchSettings }
   | { screen: 'countdown'; left: number; settings: MatchSettings }
   | { screen: 'tutorial'; step: number; prevDamage: number }
-  | { screen: 'charSelect'; slot: PlayerSlot; mode: MatchMode; online: boolean; cursor: 0 | 1 | 2 | 3 }
+  | { screen: 'charSelect'; slot: PlayerSlot; mode: MatchMode; online: boolean; training?: boolean; cursor: 0 | 1 | 2 | 3 }
   | {
       screen: 'mapSelect'
       cursor: 0 | 1 | 2
@@ -463,6 +463,9 @@ async function boot(): Promise<void> {
         sim = createInitialSim({ mode: 'pve', p1Char: 0, p2Char: 1, mapId: 0, tutorial: true })
         bgmStart()
         flow = { screen: 'tutorial', step: 0, prevDamage: 0 }
+      } else if (e.code === 'Digit6' || e.code === 'Numpad6') {
+        // 训练场：选角后直接开打（假人=磐石）
+        flow = { screen: 'charSelect', slot: 'p1', mode: 'pve', online: false, training: true, cursor: 0 }
       }
       return
     }
@@ -490,6 +493,17 @@ async function boot(): Promise<void> {
       if (e.code === left) flow = { ...flow, cursor: ((flow.cursor + 3) % 4) as 0 | 1 | 2 | 3 }
       else if (e.code === right) flow = { ...flow, cursor: ((flow.cursor + 1) % 4) as 0 | 1 | 2 | 3 }
       else if (e.code === confirm || e.code === confirm2) {
+        if (flow.slot === 'p1' && flow.training) {
+          // 训练场：选角后直接开打（假人固定磐石，孤岛）
+          startMatch({
+            mode: 'pve',
+            p1Char: flow.cursor,
+            p2Char: 1,
+            mapId: 0,
+            training: true,
+          })
+          return
+        }
         if (flow.slot === 'p1') {
           if (flow.online) {
             // 联机房主选完自己的：等对手报角色（可能已经报过了）

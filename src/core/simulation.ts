@@ -123,7 +123,7 @@ export function createInitialSim(
     jumpBuffer: 0,
     dropTimer: 0,
     damage: 0,
-    stocks: settings.tutorial ? 99 : START_STOCKS,
+    stocks: settings.tutorial || settings.training ? 99 : START_STOCKS,
     out: false,
     invuln: SPAWN_INVULN,
     hitstun: 0,
@@ -155,7 +155,7 @@ export function createInitialSim(
     players: [mk(0, settings.p1Char), mk(1, settings.p2Char)],
     prev: [emptyInput(), emptyInput()],
     weapons: [],
-    weaponTimer: settings.tutorial ? 120 : WEAPON_FIRST_SPAWN, // 教学关 2 秒就刷武器
+    weaponTimer: settings.tutorial || settings.training ? 120 : WEAPON_FIRST_SPAWN, // 教学关 2 秒就刷武器
     weaponSpawnCount: 0,
     nextWeaponId: 1,
     aiAction: 'approach',
@@ -673,7 +673,7 @@ function checkBlastzones(s: SimState): void {
     p.comboOpen = 0
     p.chainQueued = false
     if (p.stocks <= 0) {
-      if (s.settings.tutorial) {
+      if (s.settings.tutorial || s.settings.training) {
         // 教学：假人打不死，回满命继续当靶子
         p.stocks = 99
         respawn(p)
@@ -723,7 +723,7 @@ function aiInput(s: SimState): PlayerInput {
   const inp = emptyInput()
   if (s.matchOver !== 0 || me.out) return inp
   // 新手教学：假人不还手、不乱动，站桩陪练
-  if (s.settings.tutorial) return inp
+  if (s.settings.tutorial || s.settings.training) return inp
   // 难度参数表：反应速度 / 防御欲 / 闪避欲 / 蓄力阈值与概率
   const lv = s.settings.aiLevel ?? 1
   const think = lv === 0 ? AI_THINK_INTERVAL + 9 : lv === 2 ? AI_THINK_INTERVAL - 3 : AI_THINK_INTERVAL

@@ -156,11 +156,37 @@ export async function createRenderer(): Promise<Renderer> {
   } | null = null
   let prevCountdownLeft: number | null = null
 
-  // 连击计数（表现层）：被打的一方连续吃招的段数
+  // 连击计数（表现层）：被打的一方连续吃招的段数与伤害
   const comboState = [
-    { count: 0, timer: 0 },
-    { count: 0, timer: 0 },
+    { count: 0, timer: 0, dmg: 0, lastCount: 0, lastDmg: 0, maxCount: 0, maxDmg: 0 },
+    { count: 0, timer: 0, dmg: 0, lastCount: 0, lastDmg: 0, maxCount: 0, maxDmg: 0 },
   ]
+  let lastSeenTick = 0
+  const resetCombos = (): void => {
+    for (const cs of comboState) {
+      cs.count = 0
+      cs.timer = 0
+      cs.dmg = 0
+      cs.lastCount = 0
+      cs.lastDmg = 0
+      cs.maxCount = 0
+      cs.maxDmg = 0
+    }
+  }
+  /** 连招终结（窗口过期或KO）：写入上次/最高纪录 */
+  const finalizeCombo = (i: number): void => {
+    const cs = comboState[i]
+    if (cs.count > 0) {
+      cs.lastCount = cs.count
+      cs.lastDmg = cs.dmg
+      if (cs.dmg > cs.maxDmg) {
+        cs.maxDmg = cs.dmg
+        cs.maxCount = cs.count
+      }
+    }
+    cs.count = 0
+    cs.dmg = 0
+  }
   const font = { fontFamily: '"Microsoft YaHei", sans-serif' } as const
 
   // ---- 对局用文字 ----
@@ -198,6 +224,12 @@ export async function createRenderer(): Promise<Renderer> {
   koText.visible = false
   app.stage.addChild(koText)
   let koTimer = 0
+  // 训练场统计面板
+  const statText = mkText(17, COLORS.text)
+  statText.style.lineHeight = 26
+  statText.position.set(28, H - 156)
+  statText.visible = false
+  app.stage.addChild(statText)
   // 伤害飘字池：命中跳出数字，上浮渐隐（6 个轮转够用）
   const floatPool: { t: Text; life: number; wx: number; wy: number }[] = []
   for (let i = 0; i < 6; i++) {
@@ -265,6 +297,7 @@ export async function createRenderer(): Promise<Renderer> {
       f.life = 0
     }
     for (const t of keycapTexts) t.visible = false
+    statText.visible = false
   }
 
   function showLines(
@@ -344,6 +377,7 @@ export async function createRenderer(): Promise<Renderer> {
       // ---- 选项行：键帽芯片 + 主标签 + 次要说明 ----
       const options: { key: string; label: string; sub: string }[] = [
         { key: '5', label: '新手教学', sub: '12 步上手（第一次玩选这个）' },
+        { key: '6', label: '训练场', sub: '连招练习 · 无限假人 · 连击统计' },
         { key: '1', label: '本地双人', sub: '和朋友挤一个键盘' },
         { key: '2', label: '挑战电脑', sub: '简单 / 普通 / 困难' },
         { key: '3', label: '设置', sub: '改键 · 音量 · 全屏' },
@@ -626,6 +660,9 @@ export async function createRenderer(): Promise<Renderer> {
     const isTutorial = screen.kind === 'tutorial'
     const net = screen.kind === 'match' ? screen.net : undefined
     hideMenus()
+    // 新对局（帧号回落）：连击统计清零
+    if (s.tick < lastSeenTick) resetCombos()
+    lastSeenTick = s.tick
 
     // ---- 动态镜头：框住所有存活角色；被击飞的角色按速度外推，镜头提前预判 ----
     {
@@ -733,7 +770,10 @@ export async function createRenderer(): Promise<Renderer> {
     }
 
     hud1.text = hudText('P1', s.players[0])
-    hud2.text = hudText(s.settings.mode === 'pve' ? '电脑' : 'P2', s.players[1])
+    hud2.text = hudText(
+      s.settings.training ? '假人' : s.settings.mode === 'pve' ? '电脑' : 'P2',
+      s.players[1],
+    )
     // 伤害渐变配色：白 → 黄 → 橙 → 红
     const dmgColor = (d: number): number =>
       d >= 120 ? 0xff5252 : d >= 80 ? 0xff9f40 : d >= 40 ? 0xffd740 : COLORS.text
@@ -748,6 +788,22 @@ export async function createRenderer(): Promise<Renderer> {
     g.roundRect(W - 349, 8, 5, 54, 2.5).fill({ color: COLORS.p2, alpha: 0.9 })
     drawShieldBar(g, 24, 50, s.players[0].shieldHp)
     drawShieldBar(g, W - 24 - 90, 50, s.players[1].shieldHp)
+
+    // 训练场统计面板（左下角）
+    if (s.settings.training) {
+      const cs = comboState[1] // 假人身上累计的连击
+      g.roundRect(14, H - 170, 236, 122, 9).fill({ color: 0x10141c, alpha: 0.78 })
+      g.roundRect(14, H - 170, 236, 122, 9).stroke({ width: 1.2, color: 0x2b3242 })
+      g.roundRect(14, H - 170, 236, 3, 1.5).fill({ color: 0xffd740, alpha: 0.55 })
+      statText.text =
+        `训练场   R 重置假人\n` +
+        `当前  ${cs.count} 段 · ${Math.floor(cs.dmg)}%\n` +
+        `上次  ${cs.lastCount} 段 · ${Math.floor(cs.lastDmg)}%\n` +
+        `最高  ${cs.maxCount} 段 · ${Math.floor(cs.maxDmg)}%`
+      statText.visible = true
+    } else {
+      statText.visible = false
+    }
 
     if (s.matchOver === 0) {
       overlay.text = ''
@@ -810,19 +866,22 @@ export async function createRenderer(): Promise<Renderer> {
           spawnFloat(px, py, dmgDelta)
           // 连击计数：被打方累计
           comboState[i].count++
+          comboState[i].dmg += dmgDelta
           comboState[i].timer = 45
         } else if (prev.shieldHp[i] - cur.shieldHp[i] > 0.5) {
           juice.spawnHit(px, py - PLAYER_H / 2, 0.3, 0x53e6c0)
           sfx.shieldBlock()
         }
-        // 出界/KO：连击清零 + 全屏闪光 + KO 大字
+        // 出界/KO：连击终结入纪录 + 全屏闪光 + KO 大字
         if (cur.stocks[i] < prev.stocks[i]) {
           juice.spawnKO(prev.positions[i][0], prev.positions[i][1], i === 0 ? COLORS.p1 : COLORS.p2)
           sfx.ko()
           koFlash = 8
           koTimer = 55
+          finalizeCombo(1 - i) // 攻击方的这套连招记入纪录
           comboState[i].count = 0
           comboState[i].timer = 0
+          comboState[i].dmg = 0
         }
         if (cur.weapon[i] !== null && prev.weapon[i] === null) {
           juice.spawnPickup(px, py, 0xffe08a)
@@ -847,12 +906,12 @@ export async function createRenderer(): Promise<Renderer> {
       const cs = comboState[i]
       if (cs.timer > 0) {
         cs.timer--
-        if (cs.timer === 0) cs.count = 0
+        if (cs.timer === 0) finalizeCombo(i)
       }
       const t = comboTexts[i]
       if (cs.count >= 2 && cs.timer > 0) {
         const [px, py] = cur.positions[i]
-        t.text = `${cs.count} 连击!`
+        t.text = `${cs.count} 连击 · ${Math.floor(cs.dmg)}%`
         t.style.fill = COLORS.chargeTiers[Math.min(2, Math.floor(cs.count / 3))]
         t.position.set(
           Math.max(120, Math.min(W - 120, (px - cam.x) * cam.s + W / 2)),
