@@ -776,7 +776,28 @@ function aiInput(s: SimState): PlayerInput {
       const adx = Math.abs(foe.x - me.x)
       const ady = Math.abs(foe.y - me.y)
       const inRange = adx < AI_REACH_X && ady < AI_REACH_Y
-      if (inRange) {
+      // ---- 格斗智商（按难度解锁） ----
+      // 对手后摇中（判定已过、招式未收）= 可惩罚窗口
+      const foeRecovering = foe.attackTimer > 0 && !foe.attackActive
+      // 对手悬在场地外/坠崖中 = 守边时机
+      const foeOverSolid = solids.some(
+        (pl) => foe.x > pl.x - 10 && foe.x < pl.x + pl.w + 10,
+      )
+      const foeOffstage = !foe.grounded && (!foeOverSolid || foe.y > 620)
+
+      if (lv >= 1 && me.comboOpen > 0 && me.comboStep < 2 && adx < AI_REACH_X + 18 && ady < AI_REACH_Y + 10) {
+        // 普通+：连段衔接——窗口内立即按攻击接下一段
+        s.aiAction = 'chain'
+        s.aiUntil = s.tick + 4
+      } else if (lv === 2 && foeOffstage) {
+        // 困难：守边——站到对手回场点的岸上等它，靠近就打
+        s.aiAction = 'edgeguard'
+        s.aiUntil = s.tick + think + Math.floor(r * 6)
+      } else if (lv === 2 && foeRecovering && adx < AI_REACH_X + 26 && ady < AI_REACH_Y) {
+        // 困难：后摇惩罚——对手出拳落空的瞬间扑上来
+        s.aiAction = 'attack'
+        s.aiUntil = s.tick + 8
+      } else if (inRange) {
         if (foe.attackActive && me.shieldHp > 35 && r < shieldP) s.aiAction = 'shield'
         else if (foe.attackTimer > 0 && r < dodgeP) s.aiAction = 'dodge'
         else if (foe.damage > chargeDmg && r < chargeP) s.aiAction = 'charge'
@@ -784,10 +805,16 @@ function aiInput(s: SimState): PlayerInput {
       } else {
         s.aiAction = r < 0.1 ? 'idle' : r < 0.2 ? 'retreat' : 'approach'
       }
-      // 蓄力需要足够长的计划窗口才能蓄到档位
+      // 计划窗口：连段/惩罚要短窗快断；蓄力要长窗蓄到档位
+      const shortWindow =
+        s.aiAction === 'chain' || s.aiAction === 'edgeguard' || s.aiAction === 'attack'
       s.aiUntil =
         s.tick +
-        (s.aiAction === 'charge' ? 50 : think + Math.floor(r * 8))
+        (s.aiAction === 'charge'
+          ? 50
+          : shortWindow
+            ? Math.min(Math.max(s.aiUntil - s.tick, 4), 8)
+            : think + Math.floor(r * 8))
     }
   }
 
@@ -827,6 +854,39 @@ function aiInput(s: SimState): PlayerInput {
         }
       }
       if (best) inp[best.x > me.x ? 'right' : 'left'] = true
+      break
+    }
+    case 'chain':
+      // 连段衔接：按下即预输入，接段由连招系统自动完成
+      inp.attack = true
+      break
+    case 'edgeguard': {
+      // 守边：站位钳在实体平台内（绝不跟着跳下去），对手飘进攻击范围就出手
+      const solids2 = mapOf(s.settings.mapId).platforms.filter((pl) => !pl.soft)
+      let target = foe.x
+      for (const pl of solids2) {
+        if (foe.x > pl.x - 60 && foe.x < pl.x + pl.w + 60) {
+          target = Math.max(pl.x + 26, Math.min(pl.x + pl.w - 26, foe.x))
+          break
+        }
+      }
+      if (me.grounded) {
+        if (target > me.x + 20) {
+          // 前方仍是实体才移动（防滑出边缘）
+          const probeX = me.x + 30
+          if (solids2.some((pl) => probeX > pl.x && probeX < pl.x + pl.w)) {
+            inp.right = true
+          }
+        } else if (target < me.x - 20) {
+          const probeX = me.x - 30
+          if (solids2.some((pl) => probeX > pl.x && probeX < pl.x + pl.w)) {
+            inp.left = true
+          }
+        }
+      }
+      if (Math.abs(foe.x - me.x) < AI_REACH_X && Math.abs(foe.y - me.y) < 105) {
+        inp.attack = s.tick % 8 < 2
+      }
       break
     }
     case 'approach': {

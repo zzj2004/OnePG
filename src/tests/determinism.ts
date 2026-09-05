@@ -516,6 +516,24 @@ check(
   check('训练·武器 2 秒内快速刷新', sim.weaponSpawnCount >= 1, `已刷新 ${sim.weaponSpawnCount} 把`)
 }
 
+// ---- M4j：AI 难度阶梯（普通/困难都必须能赢站桩玩家，困难必须更快） ----
+function aiWinFrames(lv: 0 | 1 | 2): number {
+  const sim = createInitialSim({ mode: 'pve', p1Char: 0, p2Char: 0, mapId: 0, aiLevel: lv })
+  for (let f = 1; f <= 5400; f++) {
+    step(sim, [emptyInput(), emptyInput()])
+    if (sim.matchOver !== 0) return f
+  }
+  return 5400
+}
+const tNormal = aiWinFrames(1)
+const tHard = aiWinFrames(2)
+check('M4j·普通AI能完整击败站桩玩家', tNormal < 5400, `耗时 ${tNormal} 帧`)
+check(
+  'M4j·困难AI不慢于普通（格斗智商兑现）',
+  tHard <= tNormal && tHard < 5400,
+  `困难 ${tHard} 帧 vs 普通 ${tNormal} 帧`,
+)
+
 if (failed) {
   // 用异常而非 process.exit：保持核心代码零 Node 依赖
   throw new Error('测试未通过：上面的 ❌ 项必须先修好')
